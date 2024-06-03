@@ -164,14 +164,15 @@ class LineButton
 
 class SlotSymbol
 {
-    constructor (scene, sprite, blurTexture, posY, frameRate)
+    constructor (scene, reel, sprite, blurTexture, posY, frameRate)
     {
         this.scene = scene;
         this.sprite = sprite;
         this.sprite.depth = -1;
-        this.normalTexture = sprite.texture;
+        this.normalTexture = sprite.texture;    // sprite name, ID
         this.blurTexture = blurTexture;
         this.posY = posY;
+        this.reel = reel;
         this.orderOnReel = 0;
         this.sprite.setPosition(this.sprite.x, Math.round(this.posY));
         //this.sprite.setVisible(false);
@@ -197,16 +198,19 @@ class SlotSymbol
     setIcon(icon)
     {
         this.sprite.setTexture(this.blur ? this.blurTexture : this.normalTexture);
-        this.sprite.name = icon;
+        this.sprite.name = icon;        // ID
     }
-//修改变化变化图片的地方
+
     showAnim(show)
     {
         if(show)
         {
-            this.sprite.setVisible(true);
-            if(this.anim !== null){ this.anim.stop();  this.anim.destroy();}
-            this.anim = null;
+            if(this.anim == null)
+            {
+                this.sprite.setVisible(false);            
+                this.anim = this.scene.add.sprite(this.sprite.x, this.posY, this.sprite.name + 'Sheet').setOrigin(0.5).play({ key: this.sprite.name + 'anim'});  // , frameRate : this.frameRate
+                this.anim.depth = 10;
+            }
         }
 
         else
@@ -228,6 +232,20 @@ class SlotSymbol
     {
         this.sprite.setVisible(visible);
     }
+
+    changeSymbol(icon, blurTexture)
+    {
+        this.normalTexture = icon;
+        this.blurTexture = blurTexture;
+        this.setIcon(icon);
+       // if(this.symbolAnim!==null) this.symbolAnim.destroy();
+        this.symbolAnim = this.scene.anims.create({
+            key: this.sprite.name + 'anim',
+            frames: this.scene.anims.generateFrameNumbers(this.sprite.name + 'Sheet'),
+            frameRate: this.frameRate,
+            repeat: -1
+        });
+    }
 }
 
 class Reel{
@@ -237,6 +255,7 @@ class Reel{
         this.scene = scene;
         this.reelData = reelData;
         this.symbOrder = reelData.symbolImages;  
+        this.cachedOrder = [...this.symbOrder];         // cache source symbol order 
         this.maskImage = reelData.maskImage;
         this.posX = scene.centerX + reelData.offsetX;
         this.posY = scene.centerY + reelData.offsetY;
@@ -255,6 +274,9 @@ class Reel{
 
     _create() 
     {
+        this.startSpinEvent = new MKEvent();
+        this.endSpinEvent = new MKEvent();
+
         this.windowOffsetY = (this.windowsCount - 1) / 2 * this.symbolSizeY;    // 0 window offset
         this.windowPosY = this.posY + this.windowOffsetY;                       // 0 window position
         this.visibleMaxY = this.getWindowPosition(0).y + this.symbolSizeY * 0.8; // 0.6;
@@ -277,8 +299,8 @@ class Reel{
             var posY = this.windowPosY - (si * this.symbolSizeY);
             var symbSprite = this.scene.add.image(this.posX, posY, symbName);   
             symbSprite.name = symbName;                         // set name                
-            symbSprite.setMask(gMask);                        // apply mask
-            var symbol = new SlotSymbol(this.scene, symbSprite, symbName + 'Blurred',  posY, this.animFrameRate);
+            symbSprite.setMask(gMask);                          // apply mask
+            var symbol = new SlotSymbol(this.scene, this, symbSprite, symbName + 'Blurred',  posY, this.animFrameRate);
             this.setIconAndAddAtTop(symbol)
             this.symbols.push(symbol);
             this.symbolSpites.push(symbSprite);
@@ -348,11 +370,13 @@ class Reel{
         sA.add((callBack) =>{
             this.canSpin = true; 
             console.log(this.reelNumber + ' - reel spin complete');
+            this.endSpinEvent.invoke();
             completeCallBack(); 
             callBack();
         }, this);
 
         sA.start();
+        this.startSpinEvent.invoke();
     }
 
     symbolsMove(posY, dPos)
@@ -505,6 +529,25 @@ class Reel{
         this.blur = blur;
         this.symbols.forEach((s)=>{s.setBlur(blur);});
     }
+
+    replaceOrder(slotSymbol, newSymbolId)
+    {
+        // console.log('replace order');
+        var symbOrder = slotSymbol.orderOnReel;
+        this.symbOrder[symbOrder] = newSymbolId;        // replace old id in current order
+        slotSymbol.changeSymbol(newSymbolId, newSymbolId + 'Blurred');
+        // console.log('new order : ' + this.symbOrder);
+        // console.log('cached order : ' + this.cachedOrder);
+    }
+
+    restoreOrder(){
+        this.symbOrder = [...this.cachedOrder]; 
+        this.symbols.forEach((s)=>
+        {
+            var iconID = this.symbOrder[s.orderOnReel];
+            if(s.sprite.name != iconID) s.changeSymbol(iconID, iconID + 'Blurred');
+        });
+    }
 }
 
 class LineBehavior
@@ -534,7 +577,7 @@ class LineBehavior
     {
        this.graphics = this.scene.add.graphics();
        this.graphics.depth = 20;
-       this.graphics.lineStyle(8, this.color, 1);
+       this.graphics.lineStyle(3, this.color, 1);
        this.linePoints = [];
        for(var i = 0; i < this.lineData.length; i++)
        {
@@ -549,6 +592,7 @@ class LineBehavior
        if(this.lineButton != null) this.lineButton.addPointerDownEvent(this.buttonClickHandler, this); 
        
       this.setLineVisible(false);
+      if(slotConfig.showWinLines != null && slotConfig.showWinLines === false) this.graphics.setAlpha(0);
     }
 
     select(burn)
@@ -809,9 +853,9 @@ class WinController
         this.scene = scene;
         this.linesController = linesController;
         this.scatter = scatter;
-        this.useScatter = (useScatter && scatter !== null);
+        this.useScatter = (useScatter && scatter != null);
         this.jackpot = jackpot;
-        this.useJackpot = (jackpot !== null);
+        this.useJackpot = (jackpot != null);
         this.winShowTime = winShowTime;
         this.payTable = this.scene.payTableFull;
         this.scatterPayTable = this.scene.scatterPayTable;
@@ -1186,8 +1230,6 @@ class SlotPlayer{
         this.changeLevelProgressEvents = [];
         this.levelUpReward = 0;
         this.useLevelUpReward = false;
-        this.minWin = 200;                      // to show big, mega, huge popup
-        this.useBigWinCongratulation = true;    // to show big, mega, huge popup
         this.loadCoins();
     }
 
@@ -1204,14 +1246,14 @@ class SlotPlayer{
         if (changed) 
         {
             this.changeCoinsEvents.forEach((eW)=>{ if (eW!=null && eW.action!=null) eW.action.call(eW.context, this.coins); });
-           // localStorage.setItem('mk_china_bl_amount', this.coins); // save coins
+           // localStorage.setItem('mk_wildwest_bl_amount', this.coins); // save coins
         }
     }
 
     loadCoins()
     {
         var amount = this.defaultCoins;
-       // amount = parseInt(localStorage.getItem('mk_china_bl_amount')) || this.defaultCoins; // load https://www.dynetisgames.com/2018/10/28/how-save-load-player-progress-localstorage/
+       // amount = parseInt(localStorage.getItem('mk_wildwest_bl_amount')) || this.defaultCoins; // load https://www.dynetisgames.com/2018/10/28/how-save-load-player-progress-localstorage/
         this.setCoinsCount(amount);
     }
 
@@ -1368,7 +1410,7 @@ class SlotControls
 
     init(selectLines, burn)
     {
-        if (this.hold !== null) this.hold.changeBetMultiplierEvent.add((hm) => {this.refreshBetLines();}, this);
+        if (this.hold != null) this.hold.changeBetMultiplierEvent.add(() => {this.holdMultiplier = this.hold.getMultiplier(); this.refreshBetLines();}, this);
         this.changeAutoSpinsCounterEvent.add( (r, i) => {if (this.autoSpinsCountText != null) this.autoSpinsCountText.text = i;}, this);
         this.changeSelectedLinesEvent.add((l, b) => {if (this.infoText !== null) this.infoText.text = (l > 0) ? 'Click to SPIN to start!' : 'Select any slot line!';}, this);
         if(selectLines ==='all')
@@ -1395,7 +1437,7 @@ class SlotControls
 
     useHold()
     {
-        return (this.hold !== null && this.hold.enabled); 
+        return (this.hold != null); 
     }
 
     isReelsSpin()
@@ -1440,7 +1482,7 @@ class SlotControls
     refreshSpins()
     {
         if (this.autoSpinsCountText != null) this.autoSpinsCountText.text = this.autoSpinCount;
-        if (this.freeSpinText != null) this.freeSpinText.text = (this.freeSpins > 0) ? 'Free': '';
+        if (this.freeSpinText != null) this.freeSpinText.text = (this.freeSpins > 0) ? '': '';
         if (this.freeSpinCountText != null) this.freeSpinCountText.text = (this.freeSpins > 0) ? this.freeSpins : '';
     }
 
@@ -1514,7 +1556,7 @@ class SlotControls
 
     changeFreeSpinsHandler(newFreeSpinsCount)
     {
-        if (this.freeSpinText != null) this.freeSpinText.text = (this.freeSpins > 0) ? "Free" : "";
+        if (this.freeSpinText != null) this.freeSpinText.text = (this.freeSpins > 0) ? "" : "";
         if (this.freeSpinCountText != null) this.freeSpinCountText.text = (newFreeSpinsCount > 0) ? newFreeSpinsCount : "";
     }
 
@@ -1700,7 +1742,7 @@ class SlotControls
         if (changed) 
         {
             this.changeJackpotEvent.events.forEach((eW)=>{ if (eW != null && eW.action != null) eW.action.call(eW.context, this.jackpotAmount);});
-          //  localStorage.setItem('mk_china_jp_amount', this.jackpotAmount); // save https://www.dynetisgames.com/2018/10/28/how-save-load-player-progress-localstorage/
+          //  localStorage.setItem('mk_wildwest_jp_amount', this.jackpotAmount); // save https://www.dynetisgames.com/2018/10/28/how-save-load-player-progress-localstorage/
         }
     }
 
@@ -1712,7 +1754,7 @@ class SlotControls
     loadJackpot()
     {
         var amount = this.jackpotDefaultAmount;
-      //  amount = parseInt(localStorage.getItem('mk_china_jp_amount')) || this.jackpotDefaultAmount; // load https://www.dynetisgames.com/2018/10/28/how-save-load-player-progress-localstorage/
+      //  amount = parseInt(localStorage.getItem('mk_wildwest_jp_amount')) || this.jackpotDefaultAmount; // load https://www.dynetisgames.com/2018/10/28/how-save-load-player-progress-localstorage/
         this.setJackpotAmount(amount);
     }
 
@@ -1726,3 +1768,98 @@ class SlotControls
         if (this.jackpotAmountText != null) this.jackpotAmountText.text = newAmount;
     }   
 }
+
+class HoldFeature{
+
+    constructor(scene, holdButtons, maxHold)
+    {
+        this.betMultiplier_1 = 2;
+        this.betMultiplier_2 = 4;
+        this.betMultiplier_3 = 6;
+        this.betMultiplier_4 = 8;
+
+        this.scene = scene;
+        this.maxHold = maxHold;
+        this.holdButtons = holdButtons;
+        this.pressed = [];      // pressed buttons array
+        this.holdReels = [];    // boolean array
+        this.holdButtons.forEach((hb)=>{
+             this.holdReels.push(false); 
+             hb.addClickEvent(()=>{this.clickEvenHandler(hb.reelNumber); }, this);
+            });
+        this.multiplier = 1;
+        this.changeBetMultiplierEvent = new MKEvent();
+        console.log(this.holdReels);
+    }
+
+    setControlActivity(activity)
+    {
+        if(this.holdButtons) this.holdButtons.forEach((hb)=>{hb.interactable = activity;});
+    }
+
+    getMultiplier()
+    {
+        if( this.pressed == null || this.pressed.length == 0)
+        {
+            return 1;
+        }
+        else if (this.pressed.length == 1)
+        {
+            return Math.max(1, this.betMultiplier_1);
+        }
+        else if (this.pressed.length == 2)
+        {
+            return Math.max(1, this.betMultiplier_2);
+        }
+        else if (this.pressed.length == 3)
+        {
+            return Math.max(1, this.betMultiplier_3);
+        }
+        return Math.max(1, this.betMultiplier_4);
+    }
+
+    clickEvenHandler(reelNumber)
+    {
+       // console.log('hold click: '+ reelNumber); 
+        var button = this.holdButtons[reelNumber];
+        let bIndex = this.pressed.findIndex( value => { return value == button; });
+
+        if (!button.pressed && bIndex > -1)
+        {
+            this.pressed.splice(bIndex,1); // remove button from array
+        } 
+
+        else if(button.pressed && this.pressed.length < this.maxHold)
+        {
+            this.pressed.push(button);
+        }
+
+        else if (button.pressed && this.pressed.length > 0)
+        {
+            this.pressed[0].release();
+            this.pressed.splice(0, 1);
+            this.pressed.push(button);
+        }
+
+        this.multiplier = this.getMultiplier();
+
+  
+        if (this.scene.slotControls.holdMultiplierTextL != null)
+        {          
+            this.scene.slotControls.holdMultiplierTextL.text = this.getMultiplier();
+        }
+        
+        if (this.scene.slotControls.holdMultiplierTextR != null)
+        {          
+            this.scene.slotControls.holdMultiplierTextR.text = this.getMultiplier();
+        }
+
+        this.changeBetMultiplierEvent.invoke();
+
+        for (var i = 0; i < this.holdButtons.length; i++)
+        {
+            this.holdReels[i] = this.holdButtons[i].pressed;
+        }
+    }
+}
+
