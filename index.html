@@ -1,41 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Slot Lantern</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
-
-<meta name="generator" content="Scirra Construct">
-	<meta name="author" content="tegagame">
-	<link rel="manifest" href="appmanifest.json">
-	<link rel="apple-touch-icon" sizes="129x129" href="icons/icon-128.png">
-	<link rel="apple-touch-icon" sizes="257x257" href="icons/icon-256.png">
-	<link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
-	<link rel="icon" type="image/png" href="icons/icon-512.png">
-
-<link rel="stylesheet" href="style.css">
-	<link rel="stylesheet" href="file.css">
-
+    <meta charset="utf-8" />
+    <title>Deuces Wild Slot Machine</title>
+    <link rel="shortcut icon" href="favicon.png" type="image/x-icon" />
+    <link rel="stylesheet" href="css/styles.css" type="text/css" />
+    <link rel="apple-touch-icon" href="img/game-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, minimal-ui=1" />
+    <script src="js/jquery.js"></script>
+    <!--<script src="js/stats.min.js"></script>-->
+    <script src="js/DeucesWildHandEval.js"></script>
+    <script src="js/phaser.min.js"></script>
+    <!--<script src="js/phaser.js"></script>-->
+    <script src="js/Boot.js"></script>
+    <script src="js/Preloader.js"></script>
+    <script src="js/Game.js"></script>
 </head>
 <body>
-
 <script>
-if (location.protocol.substr(0, 4) === "file")
-{
-	alert("Web exports won't work until you upload them. (When running on the file: protocol, browsers block many features from working for security reasons.)");
-}
+$(function() {
+    var game = new Phaser.Game(960, 640, Phaser.AUTO, 'game', null, true);
+    var dwsmBoot = new DWSM.Boot();
+    var dwsmPreloader = new DWSM.Preloader();
+    var dwsmGame = new DWSM.Game();
+    game.state.add('Boot', dwsmBoot);
+    game.state.add('Preloader', dwsmPreloader);
+    game.state.add('Game', dwsmGame);
+    game.state.start('Boot');
+});
 </script>
 
-	<noscript>
-		<div id="notSupportedWrap">
-			<h2 id="notSupportedTitle">This content requires JavaScript</h2>
-			<p class="notSupportedMessage">JavaScript appears to be disabled. Please enable it to view this content.</p>
-		</div>
-	</noscript>
-	<script src="scripts/supportcheck.js"></script>
-	<script src="scripts/offlineclient.js" type="module"></script>
-	<script src="scripts/main.js" type="module"></script>
-	<script src="scripts/register-sw.js" type="module"></script>
+<script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+                (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+            m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+    ga('create', 'UA-380953-18', 'auto');
+    ga('send', 'pageview');
+</script>
 
 </body>
 </html>
